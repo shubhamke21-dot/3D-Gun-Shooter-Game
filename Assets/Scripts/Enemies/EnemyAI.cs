@@ -1,92 +1,101 @@
-using System.Collections.Generic;
 using UnityEngine;
 
-public enum ItemType
+public class EnemyAI : MonoBehaviour
 {
-    Weapon,
-    Ammo,
-    Medkit,
-    Key,
-    Resource
-}
-
-[System.Serializable]
-public class InventoryItem
-{
-    public string itemId;
-    public string itemName;
-    public ItemType type;
-    public int quantity;
-}
-
-public class InventorySystem : MonoBehaviour
-{
-    private readonly List<InventoryItem> items = new();
-
-    public List<InventoryItem> Items => items;
-
-    public void AddItem(string itemId, string itemName, ItemType type, int quantity = 1)
+    public enum EnemyState
     {
-        foreach (InventoryItem item in items)
-        {
-            if (item.itemId == itemId)
-            {
-                item.quantity += quantity;
-                return;
-            }
-        }
-
-        items.Add(new InventoryItem
-        {
-            itemId = itemId,
-            itemName = itemName,
-            type = type,
-            quantity = quantity
-        });
+        Patrol,
+        Chase,
+        Attack
     }
 
-    public bool HasItem(string itemId)
-    {
-        foreach (InventoryItem item in items)
-        {
-            if (item.itemId == itemId && item.quantity > 0)
-            {
-                return true;
-            }
-        }
+    public float moveSpeed = 2.5f;
+    public float chaseRange = 14f;
+    public float attackRange = 1.8f;
+    public int maxHealth = 50;
+    public int attackDamage = 10;
+    public float attackCooldown = 1f;
+    public float patrolRadius = 8f;
 
-        return false;
+    private Transform player;
+    private Vector3 patrolTarget;
+    private int currentHealth;
+    private float nextAttackTime;
+    private EnemyState currentState = EnemyState.Patrol;
+
+    private void Start()
+    {
+        currentHealth = maxHealth;
+        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        patrolTarget = GetRandomPatrolPoint();
     }
 
-    public bool ConsumeItem(string itemId, int quantity = 1)
+    private void Update()
     {
-        foreach (InventoryItem item in items)
+        if (player == null || currentHealth <= 0)
+            return;
+
+        float distance = Vector3.Distance(transform.position, player.position);
+
+        if (distance <= chaseRange)
         {
-            if (item.itemId == itemId)
-            {
-                if (item.quantity >= quantity)
-                {
-                    item.quantity -= quantity;
-                    if (item.quantity <= 0)
-                    {
-                        items.Remove(item);
-                    }
-                    return true;
-                }
-            }
+            currentState = EnemyState.Chase;
+        }
+        else
+        {
+            currentState = EnemyState.Patrol;
         }
 
-        return false;
+        if (currentState == EnemyState.Chase)
+        {
+            Vector3 direction = (player.position - transform.position).normalized;
+            direction.y = 0f;
+
+            if (distance > attackRange)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, player.position, moveSpeed * Time.deltaTime);
+            }
+            else if (Time.time >= nextAttackTime)
+            {
+                Attack();
+                nextAttackTime = Time.time + attackCooldown;
+            }
+
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * 8f);
+        }
+        else
+        {
+            if (Vector3.Distance(transform.position, patrolTarget) < 0.6f)
+                patrolTarget = GetRandomPatrolPoint();
+
+            Vector3 patrolDirection = (patrolTarget - transform.position).normalized;
+            patrolDirection.y = 0f;
+            transform.position = Vector3.MoveTowards(transform.position, patrolTarget, moveSpeed * 0.5f * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(patrolDirection), Time.deltaTime * 5f);
+        }
     }
 
-    public void UseMedkit(PlayerController player)
+    private Vector3 GetRandomPatrolPoint()
+    {
+        Vector3 point = transform.position + new Vector3(Random.Range(-patrolRadius, patrolRadius), 0f, Random.Range(-patrolRadius, patrolRadius));
+        return point;
+    }
+
+    public void TakeDamage(int amount)
+    {
+        currentHealth -= amount;
+        if (currentHealth <= 0)
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    private void Attack()
     {
         if (player == null) return;
 
-        if (ConsumeItem("medkit", 1))
-        {
-            player.Heal(35);
-            Debug.Log("Used medkit");
-        }
+        PlayerController playerController = player.GetComponent<PlayerController>();
+        if (playerController != null)
+            playerController.TakeDamage(attackDamage);
     }
 }

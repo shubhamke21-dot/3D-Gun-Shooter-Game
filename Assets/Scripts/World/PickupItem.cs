@@ -1,42 +1,24 @@
 using UnityEngine;
-using UnityEngine.UI;
 
-public class HUDController : MonoBehaviour
+public class PickupItem : MonoBehaviour
 {
-    public PlayerController player;
-    public WeaponManager weaponManager;
-    public Text healthText;
-    public Text ammoText;
-    public Text inventoryText;
+    public string itemId = "medkit";
+    public string itemName = "Medkit";
+    public ItemType type = ItemType.Medkit;
 
-    void Start()
+    private void OnTriggerEnter(Collider other)
     {
-        if (player == null)
-        {
-            player = FindObjectOfType<PlayerController>();
-        }
+        if (!other.CompareTag("Player"))
+            return;
 
-        if (weaponManager == null)
-        {
-            weaponManager = FindObjectOfType<WeaponManager>();
-        }
-    }
+        InventorySystem inventory = other.GetComponent<InventorySystem>();
+        if (inventory == null)
+            inventory = other.GetComponentInChildren<InventorySystem>();
 
-    void Update()
-    {
-        if (player != null)
+        if (inventory != null)
         {
-            healthText.text = "Health: " + player.currentHealth + " / " + player.maxHealth;
-        }
-
-        if (weaponManager != null)
-        {
-            ammoText.text = "Ammo: " + weaponManager.GetCurrentAmmo() + " / " + weaponManager.GetReserveAmmo();
-        }
-
-        if (inventoryText != null)
-        {
-            inventoryText.text = "Inventory: Medkits available";
+            inventory.AddItem(itemId, itemName, type, 1);
+            Destroy(gameObject);
         }
     }
 }

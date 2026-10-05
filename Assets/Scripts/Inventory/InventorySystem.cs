@@ -1,212 +1,94 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-public class WeaponManager : MonoBehaviour
+public enum ItemType
 {
-    public Camera playerCamera;
-    public Transform weaponHolder;
-    public Gun[] weapons;
-    public int selectedWeaponIndex = 0;
-
-    private void Start()
-    {
-        if (playerCamera == null)
-        {
-            playerCamera = Camera.main;
-        }
-
-        if (weaponHolder == null)
-        {
-            GameObject holder = new GameObject("WeaponHolder");
-            holder.transform.SetParent(transform);
-            holder.transform.localPosition = Vector3.zero;
-            weaponHolder = holder.transform;
-        }
-
-        InitializeWeapons();
-    }
-
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Alpha1)) SelectWeapon(0);
-        if (Input.GetKeyDown(KeyCode.Alpha2)) SelectWeapon(1);
-        if (Input.GetKeyDown(KeyCode.Alpha3)) SelectWeapon(2);
-
-        if (Input.GetButtonDown("Fire1"))
-        {
-            TryShoot();
-        }
-
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            ReloadCurrentWeapon();
-        }
-    }
-
-    private void InitializeWeapons()
-    {
-        if (weapons == null || weapons.Length == 0)
-        {
-            weapons = new Gun[1];
-            GameObject defaultWeapon = new GameObject("Pistol");
-            defaultWeapon.transform.SetParent(weaponHolder);
-            defaultWeapon.transform.localPosition = new Vector3(0.4f, -0.35f, 0.8f);
-            defaultWeapon.transform.localRotation = Quaternion.identity;
-
-            Gun gun = defaultWeapon.AddComponent<Gun>();
-            gun.playerCamera = playerCamera;
-            gun.gunData = new GunData
-            {
-                id = "pistol",
-                weaponName = "Pistol",
-                damage = 20,
-                ammoPerMag = 12,
-                reserveAmmo = 48,
-                fireRate = 0.2f,
-                range = 30f,
-                reloadTime = 1.2f
-            };
-            gun.Initialize();
-            weapons[0] = gun;
-        }
-
-        for (int i = 0; i < weapons.Length; i++)
-        {
-            if (weapons[i] != null)
-            {
-                weapons[i].gameObject.SetActive(i == selectedWeaponIndex);
-            }
-        }
-    }
-
-    public void SelectWeapon(int index)
-    {
-        if (weapons == null || index < 0 || index >= weapons.Length) return;
-
-        selectedWeaponIndex = index;
-
-        for (int i = 0; i < weapons.Length; i++)
-        {
-            if (weapons[i] != null)
-            {
-                weapons[i].gameObject.SetActive(i == selectedWeaponIndex);
-            }
-        }
-    }
-
-    public void TryShoot()
-    {
-        if (weapons == null || weapons.Length == 0) return;
-        if (weapons[selectedWeaponIndex] != null)
-        {
-            weapons[selectedWeaponIndex].TryShoot();
-        }
-    }
-
-    public void ReloadCurrentWeapon()
-    {
-        if (weapons == null || weapons.Length == 0) return;
-        if (weapons[selectedWeaponIndex] != null)
-        {
-            weapons[selectedWeaponIndex].Reload();
-        }
-    }
-
-    public int GetCurrentAmmo()
-    {
-        if (weapons == null || weapons.Length == 0 || weapons[selectedWeaponIndex] == null)
-            return 0;
-        return weapons[selectedWeaponIndex].CurrentAmmo;
-    }
-
-    public int GetReserveAmmo()
-    {
-        if (weapons == null || weapons.Length == 0 || weapons[selectedWeaponIndex] == null)
-            return 0;
-        return weapons[selectedWeaponIndex].ReserveAmmo;
-    }
+    Weapon,
+    Ammo,
+    Medkit,
+    Key,
+    Resource
 }
 
 [System.Serializable]
-public class GunData
+public class InventoryItem
 {
-    public string id;
-    public string weaponName;
-    public int damage;
-    public int ammoPerMag;
-    public int reserveAmmo;
-    public float fireRate;
-    public float range;
-    public float reloadTime;
+    public string itemId;
+    public string itemName;
+    public ItemType type;
+    public int quantity;
 }
 
-public class Gun : MonoBehaviour
+public class InventorySystem : MonoBehaviour
 {
-    public GunData gunData;
-    public Camera playerCamera;
-    public int CurrentAmmo { get; private set; }
-    public int ReserveAmmo { get; private set; }
-    public bool IsReloading { get; private set; }
+    private readonly List<InventoryItem> items = new List<InventoryItem>();
 
-    private float nextFireTime;
-
-    public void Initialize()
+    public void AddItem(string itemId, string itemName, ItemType type, int quantity = 1)
     {
-        if (gunData == null) return;
-        CurrentAmmo = gunData.ammoPerMag;
-        ReserveAmmo = gunData.reserveAmmo;
+        foreach (InventoryItem item in items)
+        {
+            if (item.itemId == itemId)
+            {
+                item.quantity += quantity;
+                return;
+            }
+        }
+
+        items.Add(new InventoryItem
+        {
+            itemId = itemId,
+            itemName = itemName,
+            type = type,
+            quantity = quantity
+        });
     }
 
-    public void TryShoot()
+    public bool HasItem(string itemId)
     {
-        if (gunData == null) return;
-        if (IsReloading) return;
-        if (CurrentAmmo <= 0)
+        foreach (InventoryItem item in items)
         {
-            Reload();
-            return;
+            if (item.itemId == itemId && item.quantity > 0)
+                return true;
         }
+        return false;
+    }
 
-        if (Time.time < nextFireTime) return;
-
-        nextFireTime = Time.time + gunData.fireRate;
-        CurrentAmmo--;
-
-        if (playerCamera == null)
+    public int GetItemCount(string itemId)
+    {
+        foreach (InventoryItem item in items)
         {
-            playerCamera = Camera.main;
+            if (item.itemId == itemId)
+                return item.quantity;
         }
+        return 0;
+    }
 
-        if (playerCamera != null)
+    public bool ConsumeItem(string itemId, int quantity = 1)
+    {
+        foreach (InventoryItem item in items)
         {
-            Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-            if (Physics.Raycast(ray, out RaycastHit hit, gunData.range))
+            if (item.itemId == itemId)
             {
-                EnemyAI enemy = hit.collider.GetComponent<EnemyAI>();
-                if (enemy != null)
+                if (item.quantity >= quantity)
                 {
-                    enemy.TakeDamage(gunData.damage);
+                    item.quantity -= quantity;
+                    if (item.quantity <= 0)
+                        items.Remove(item);
+                    return true;
                 }
             }
         }
+        return false;
     }
 
-    public void Reload()
+    public void UseMedkit(PlayerController player)
     {
-        if (gunData == null || IsReloading || ReserveAmmo <= 0 || CurrentAmmo == gunData.ammoPerMag) return;
+        if (player == null) return;
 
-        StartCoroutine(ReloadRoutine());
-    }
-
-    private System.Collections.IEnumerator ReloadRoutine()
-    {
-        IsReloading = true;
-        yield return new WaitForSeconds(gunData.reloadTime);
-
-        int neededAmmo = gunData.ammoPerMag - CurrentAmmo;
-        int ammoToLoad = Mathf.Min(neededAmmo, ReserveAmmo);
-        CurrentAmmo += ammoToLoad;
-        ReserveAmmo -= ammoToLoad;
-
-        IsReloading = false;
+        if (ConsumeItem("medkit", 1))
+        {
+            player.Heal(35);
+            Debug.Log("Used medkit");
+        }
     }
 }

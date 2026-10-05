@@ -1,42 +1,36 @@
 using UnityEngine;
+using UnityEngine.UI;
 
-public class GameManager : MonoBehaviour
+public class HUDController : MonoBehaviour
 {
     public PlayerController player;
-    public InventorySystem inventory;
-    public HUDController hud;
+    public WeaponSwitcher weaponSwitcher;
+    public Text healthText;
+    public Text ammoText;
+    public Text inventoryText;
 
-    void Start()
+    private void Start()
     {
         if (player == null)
-        {
             player = FindObjectOfType<PlayerController>();
-        }
 
-        if (inventory == null)
-        {
-            inventory = FindObjectOfType<InventorySystem>();
-        }
-
-        if (hud == null)
-        {
-            hud = FindObjectOfType<HUDController>();
-        }
-
-        inventory.AddItem("medkit", "Medkit", ItemType.Medkit, 2);
+        if (weaponSwitcher == null)
+            weaponSwitcher = FindObjectOfType<WeaponSwitcher>();
     }
 
-    void Update()
+    private void Update()
     {
-        if (player != null && Input.GetKeyDown(KeyCode.E))
+        if (player != null && healthText != null)
+            healthText.text = "Health: " + player.currentHealth + " / " + player.maxHealth;
+
+        if (weaponSwitcher != null && weaponSwitcher.GetCurrentWeapon() != null)
         {
-            inventory.UseMedkit(player);
+            FPSWeapon currentWeapon = weaponSwitcher.GetCurrentWeapon();
+            if (ammoText != null)
+                ammoText.text = "Ammo: " + currentWeapon.CurrentAmmo + " / " + currentWeapon.ReserveAmmo;
         }
 
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
+        if (inventoryText != null)
+            inventoryText.text = "Inventory: Medkits";
     }
 }

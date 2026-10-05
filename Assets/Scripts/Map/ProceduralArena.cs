@@ -1,70 +1,118 @@
 using UnityEngine;
 
-public class EnemyAI : MonoBehaviour
+public class ProceduralArena : MonoBehaviour
 {
-    public float moveSpeed = 2.6f;
-    public float chaseRange = 14f;
-    public float attackRange = 1.8f;
-    public int maxHealth = 50;
-    public int attackDamage = 10;
-    public float attackCooldown = 1f;
+    public GameObject enemyPrefab;
+    public GameObject medkitPrefab;
+    public GameObject ammoPrefab;
+    public int arenaWidth = 40;
+    public int arenaDepth = 40;
+    public int obstacleCount = 14;
+    public int enemyCount = 8;
+    public int medkitCount = 5;
+    public int ammoCount = 6;
 
-    private Transform target;
-    private int currentHealth;
-    private float nextAttackTime;
-
-    void Start()
+    private void Start()
     {
-        currentHealth = maxHealth;
-        target = GameObject.FindGameObjectWithTag("Player")?.transform;
+        BuildArena();
+        SpawnEnemies();
+        SpawnPickups();
     }
 
-    void Update()
+    private void BuildArena()
     {
-        if (target == null || currentHealth <= 0)
+        GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        floor.name = "Floor";
+        floor.transform.localScale = new Vector3(arenaWidth, 1f, arenaDepth);
+        floor.transform.position = new Vector3(0f, -0.5f, 0f);
+
+        CreateWall(new Vector3(0f, 2f, -arenaDepth / 2f), new Vector3(arenaWidth, 4f, 1f));
+        CreateWall(new Vector3(0f, 2f, arenaDepth / 2f), new Vector3(arenaWidth, 4f, 1f));
+        CreateWall(new Vector3(-arenaWidth / 2f, 2f, 0f), new Vector3(1f, 4f, arenaDepth));
+        CreateWall(new Vector3(arenaWidth / 2f, 2f, 0f), new Vector3(1f, 4f, arenaDepth));
+
+        for (int i = 0; i < obstacleCount; i++)
         {
-            return;
+            Vector3 pos = new Vector3(
+                Random.Range(-arenaWidth / 2 + 4, arenaWidth / 2 - 4),
+                0.8f,
+                Random.Range(-arenaDepth / 2 + 4, arenaDepth / 2 - 4));
+
+            GameObject obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obstacle.name = "Obstacle_" + i;
+            obstacle.transform.position = pos;
+            obstacle.transform.localScale = new Vector3(Random.Range(2f, 6f), Random.Range(2f, 5f), Random.Range(2f, 6f));
+            obstacle.GetComponent<Renderer>().material.color = new Color(0.45f, 0.45f, 0.45f);
         }
+    }
 
-        float distance = Vector3.Distance(transform.position, target.position);
+    private void CreateWall(Vector3 position, Vector3 scale)
+    {
+        GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        wall.transform.position = position;
+        wall.transform.localScale = scale;
+        wall.GetComponent<Renderer>().material.color = Color.green;
+    }
 
-        if (distance <= chaseRange)
+    private void SpawnEnemies()
+    {
+        for (int i = 0; i < enemyCount; i++)
         {
-            Vector3 direction = (target.position - transform.position).normalized;
-            direction.y = 0f;
-
-            if (distance > attackRange)
+            if (enemyPrefab == null)
             {
-                transform.position = Vector3.MoveTowards(transform.position, target.position, moveSpeed * Time.deltaTime);
+                enemyPrefab = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                enemyPrefab.name = "Enemy";
+                enemyPrefab.tag = "Enemy";
+                enemyPrefab.AddComponent<EnemyAI>();
             }
-            else if (Time.time >= nextAttackTime)
+
+            Vector3 spawnPoint = new Vector3(
+                Random.Range(-arenaWidth / 2 + 2, arenaWidth / 2 - 2),
+                1f,
+                Random.Range(-arenaDepth / 2 + 2, arenaDepth / 2 - 2));
+
+            GameObject enemy = Instantiate(enemyPrefab, spawnPoint, Quaternion.identity);
+            enemy.name = "Enemy_" + i;
+            enemy.tag = "Enemy";
+        }
+    }
+
+    private void SpawnPickups()
+    {
+        for (int i = 0; i < medkitCount; i++)
+        {
+            if (medkitPrefab == null)
             {
-                Attack();
-                nextAttackTime = Time.time + attackCooldown;
+                medkitPrefab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                medkitPrefab.name = "MedkitPickup";
+                medkitPrefab.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+                medkitPrefab.AddComponent<PickupItem>();
             }
 
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * 6f);
+            Vector3 position = new Vector3(Random.Range(-arenaWidth / 2 + 2, arenaWidth / 2 - 2), 1f, Random.Range(-arenaDepth / 2 + 2, arenaDepth / 2 - 2));
+            GameObject pickup = Instantiate(medkitPrefab, position, Quaternion.identity);
+            pickup.GetComponent<PickupItem>().itemId = "medkit";
+            pickup.GetComponent<PickupItem>().itemName = "Medkit";
+            pickup.GetComponent<PickupItem>().type = ItemType.Medkit;
+            pickup.GetComponent<Renderer>().material.color = Color.red;
         }
-    }
 
-    public void TakeDamage(int amount)
-    {
-        currentHealth -= amount;
-
-        if (currentHealth <= 0)
+        for (int i = 0; i < ammoCount; i++)
         {
-            Destroy(gameObject);
-        }
-    }
+            if (ammoPrefab == null)
+            {
+                ammoPrefab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ammoPrefab.name = "AmmoPickup";
+                ammoPrefab.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+                ammoPrefab.AddComponent<PickupItem>();
+            }
 
-    private void Attack()
-    {
-        if (target == null) return;
-
-        PlayerController player = target.GetComponent<PlayerController>();
-        if (player != null)
-        {
-            player.TakeDamage(attackDamage);
+            Vector3 position = new Vector3(Random.Range(-arenaWidth / 2 + 2, arenaWidth / 2 - 2), 1f, Random.Range(-arenaDepth / 2 + 2, arenaDepth / 2 - 2));
+            GameObject pickup = Instantiate(ammoPrefab, position, Quaternion.identity);
+            pickup.GetComponent<PickupItem>().itemId = "ammo";
+            pickup.GetComponent<PickupItem>().itemName = "Ammo";
+            pickup.GetComponent<PickupItem>().type = ItemType.Ammo;
+            pickup.GetComponent<Renderer>().material.color = Color.yellow;
         }
     }
 }
